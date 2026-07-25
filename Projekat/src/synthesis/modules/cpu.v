@@ -558,6 +558,7 @@ module cpu #(
         ZIND4: begin
             z_reg=mdr_out[2:0];
             z_adr=mdr_out[3];
+            state_next=YIND;
         end
         YIND: begin
             if(y_adr==1'b1) begin
@@ -565,7 +566,9 @@ module cpu #(
                 mar_ld=1'b1;
                 state_next=YIND2;
             end
-            state_next=XIND;
+            else begin
+                state_next=XIND;
+            end
         end
         YIND2: begin
             state_next=YIND3;
@@ -585,7 +588,9 @@ module cpu #(
                 mar_ld=1'b1;
                 state_next<=XIND2;
             end
-            state_next<=EXEC1;
+            else begin
+                state_next<=EXEC1;
+            end
         end
         XIND2: begin
             state_next<=XIND3;
