@@ -29,7 +29,7 @@ always @(*) begin
     if(timer_reg > DIVISOR/2) begin
         out_next = 1'b1;    
     end
-    else if(timer_reg == DIVISOR) begin
+    if(timer_reg == DIVISOR) begin
         out_next = 1'b0;
         timer_next = 0;
     end

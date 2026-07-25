@@ -123,7 +123,7 @@ module top #(
     wire [3:0] vga_red, vga_green, vga_blue;
 
     vga vga_inst (
-        .clk(clk_out),
+        .clk(clk),
         .rst_n(sw[9]),
         .code(color_code),
         .hsync(hsync),
