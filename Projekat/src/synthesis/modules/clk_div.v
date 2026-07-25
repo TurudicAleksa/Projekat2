@@ -25,6 +25,7 @@ always @(posedge clk, negedge rst_n)
 always @(*) begin
     timer_next = timer_reg;
     out_next = out_reg;
+    timer_next = timer_reg+1;
     if(timer_reg > DIVISOR/2) begin
         out_next = 1'b1;    
     end
@@ -32,7 +33,7 @@ always @(*) begin
         out_next = 1'b0;
         timer_next = 0;
     end
-    timer_next = timer_reg+1;
+    
     
 end
 

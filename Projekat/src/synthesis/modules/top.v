@@ -75,7 +75,7 @@ module top #(
     wire [15:0] ps2_code;
 
     ps2 ps2_inst (
-        .clk(clk_out),
+        .clk(clk),
         .rst_n(sw[9]),
         .ps2_clk(kbd[0]),
         .ps2_data(kbd[1]),
@@ -91,24 +91,7 @@ module top #(
         .status(scan_status)
     );
 
-    wire [3:0] bcd_pc_ones;
-    wire [3:0] bcd_pc_tens;
 
-    bcd bcd_pc_inst (
-        .in(pc_out[5:0]),
-        .ones(bcd_pc_ones),
-        .tens(bcd_pc_tens)
-    );
-
-    ssd ssd_pc_ones_inst (
-        .in(bcd_pc_ones),
-        .out(hex[6:0])
-    );
-
-    ssd ssd_pc_tens_inst (
-        .in(bcd_pc_tens),
-        .out(hex[13:7])
-    );
 
     wire [3:0] bcd_sp_ones;
     wire [3:0] bcd_sp_tens;

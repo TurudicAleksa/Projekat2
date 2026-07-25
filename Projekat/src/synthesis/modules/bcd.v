@@ -4,7 +4,9 @@ module bcd(
     output [3:0] tens
 );
 
-wire [3:0] ones_wire= in % 10;
-wire [3:0] tens_wire= in / 10 % 10;
+assign ones = in % 10;
+assign tens = (in / 10) % 10;
+
+
 
 endmodule
