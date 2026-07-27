@@ -1,0 +1,264 @@
+    always @(*) begin
+        // --- Default Assignments ---
+        {mdr_cl, mdr_ld, mdr_inc, mdr_dec, mdr_sr, mdr_ir, mdr_sl, mdr_il} = 0;
+        {acc_cl, acc_ld, acc_inc, acc_dec, acc_sr, acc_ir, acc_sl, acc_il} = 0;
+        {mar_cl, mar_ld, mar_inc, mar_dec, mar_sr, mar_ir, mar_sl, mar_il} = 0;
+        {ir_cl, ir_ld, ir_inc, ir_dec, ir_sr, ir_ir, ir_sl, ir_il} = 0;
+        {sp_cl, sp_ld, sp_inc, sp_dec, sp_sr, sp_ir, sp_sl, sp_il} = 0;
+        {pc_cl, pc_ld, pc_inc, pc_dec, pc_sr, pc_ir, pc_sl, pc_il} = 0;
+        
+        data = mdr_out;
+        opcode = ir_out[15:12];
+        status = 1'b0;
+        pc_inc = 1'b0;
+        sp_ld = 1'b0;
+        pc_in = {(ADDR_WIDTH){1'b0}};
+        sp_in = {(ADDR_WIDTH){1'b0}};
+        pc_ld = 1'b0;
+        we_next = 1'b0;
+        mar_in = {(ADDR_WIDTH){1'b0}};
+        
+        alu_oc_next = alu_oc_reg;
+        state_next = state_reg;
+        
+        x_reg = ir_out[10:8];
+        y_reg = ir_out[6:4];
+        z_reg = ir_out[2:0];
+        x_adr = ir_out[11]; 
+        y_adr = ir_out[7]; 
+        z_adr = ir_out[3];
+        
+        in_next = {(DATA_WIDTH){1'b0}};
+        out_next = out_reg;
+
+        case (state_reg) 
+        START: begin
+            pc_in = {{(ADDR_WIDTH-4){1'b0}}, 4'b1000};
+            pc_ld = 1'b1;
+            sp_in = {(ADDR_WIDTH){1'b1}};
+            sp_ld = 1'b1;
+            we_next = 1'b0;
+            in_next = {(DATA_WIDTH){1'b0}};
+            out_next = {(DATA_WIDTH){1 me'b0}};
+            state_next = INFETCH1;
+        end
+
+        INFETCH1: begin
+            mar_ld = 1'b1;
+            mar_in = pc_out;
+            state_next = INFETCH2;
+        end
+
+        INFETCH2: begin
+            state_next = INFETCH3;
+        end
+
+        INFETCH3: begin
+            mdr_ld = 1'b1;
+            state_next = INFETCH4;
+        end
+
+        INFETCH4: begin
+            ir_ld = 1'b1;
+            ir_in = {{(DATA_WIDTH){1'b0}}, mdr_out};
+            pc_inc = 1'b1;
+            state_next = INDECODE1;
+        end
+
+        INDECODE1: begin
+            case (opcode)
+                MOV, ADD, SUB, MUL, DIV, IN, OUT: state_next = EXEC1;
+                STOP:                            state_next = STOPX1;
+                default:                         state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC1: begin
+            case(opcode)
+                MOV, ADD, SUB, MUL, DIV: begin
+                    mar_in = {{(ADDR_WIDTH-4){1'b0}}, y_adr, y_reg};
+                    mar_ld = 1'b1;
+                    state_next = EXEC2;
+                end
+                IN, OUT: begin
+                    mar_in = {{(ADDR_WIDTH-4){1'b0}}, x_adr, x_reg};
+                    mar_ld = 1'b1;
+                    state_next = EXEC2;
+                end
+                default: state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC2: begin
+            case (opcode)
+                MOV, ADD, SUB, MUL, DIV, OUT: state_next = EXEC3;
+                IN:                           state_next = PAUSE; // Go wait for keyboard
+                default:                      state_next = INFETCH1;
+            endcase
+        end
+
+        PAUSE: begin
+            status = 1'b1; // Signal to keyboard module that CPU is ready for input
+            if (!control) begin
+                // Keep waiting for keypress acknowledgement
+                we_next = 1'b0; 
+                state_next = PAUSE;             
+            end
+            else begin
+                // Keyboard data is ready! Drive 'in' into memory and assert WE
+                data = in;
+                we_next = 1'b1;
+                state_next = INFETCH1;
+            end
+        end
+
+        EXEC3: begin
+            case (opcode)
+                MOV: begin
+                    mdr_ld = 1'b1;
+                    mar_in = {{(ADDR_WIDTH-4){1'b0}}, x_adr, x_reg};
+                    mar_ld = 1'b1;
+                    state_next = EXEC4;
+                end
+                ADD, SUB, MUL, DIV: begin
+                    mdr_ld = 1'b1;
+                    state_next = EXEC4;
+                end
+                OUT: begin
+                    mdr_ld = 1'b1;  
+                    state_next = EXEC4; 
+                end
+                default: state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC4: begin
+            case (opcode)
+                MOV: begin
+                    we_next = 1'b1;
+                    state_next = EXEC5;
+                end
+                ADD, SUB, MUL, DIV: begin
+                    alu_a_next = mdr_out;
+                    mar_in = {{(ADDR_WIDTH-4){1'b0}}, z_adr, z_reg};
+                    mar_ld = 1'b1;
+                    state_next = EXEC5;
+                end
+                OUT: begin
+                    out_next = mem;
+                    state_next = EXEC5;    
+                end
+                default: state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC5: begin
+            case (opcode)
+                MOV:     state_next = INFETCH1;
+                ADD, SUB, MUL, DIV, OUT: state_next = EXEC6;
+                default: state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC6: begin
+            case (opcode)
+                ADD, SUB, MUL, DIV: begin
+                    mdr_ld = 1'b1;
+                    state_next = EXEC7;
+                end
+                OUT:     state_next = INFETCH1;
+                default: state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC7: begin
+            case (opcode)
+                ADD, SUB, MUL, DIV: begin
+                    alu_b_next = mdr_out;
+                    case (opcode)
+                        ADD: alu_oc_next = 3'b000;
+                        SUB: alu_oc_next = 3'b001;
+                        MUL: alu_oc_next = 3'b010;
+                        DIV: alu_oc_next = 3'b011;
+                    endcase
+                    mar_in = {{(ADDR_WIDTH-4){1'b0}}, x_adr, x_reg};
+                    mar_ld = 1'b1;
+                    state_next = EXEC8;
+                end
+                default: state_next = INFETCH1;
+            endcase
+        end
+
+        EXEC8: begin
+            data = alu_f;  
+            we_next = 1'b1;               
+            state_next = EXEC9;
+        end
+
+        EXEC9: begin
+            data = alu_f;              
+            state_next = INFETCH1; 
+        end   
+
+        // --- STOP handling ---
+        STOPX1: begin
+            if ({x_adr, x_reg} != 4'b0000) begin
+                mar_ld = 1'b1;
+                mar_in = {{(ADDR_WIDTH-4){1'b0}}, x_adr, x_reg};
+                state_next = STOPX2;
+            end
+            else state_next = STOPY1;
+        end
+        STOPX2: state_next = STOPX3;
+        STOPX3: begin
+            mdr_ld = 1'b1;  
+            state_next = STOPX4; 
+        end
+        STOPX4: begin
+            out_next = mem;
+            state_next = STOPX5;
+        end
+        STOPX5: state_next = STOPY1;
+        
+        STOPY1: begin
+            if ({y_adr, y_reg} != 4'b0000) begin
+                mar_ld = 1'b1;
+                mar_in = {{(ADDR_WIDTH-4){1'b0}}, y_adr, y_reg};
+                state_next = STOPY2;
+            end
+            else state_next = STOPZ1;
+        end
+        STOPY2: state_next = STOPY3;
+        STOPY3: begin
+            mdr_ld = 1'b1;  
+            state_next = STOPY4; 
+        end
+        STOPY4: begin
+            out_next = mem;
+            state_next = STOPY5;
+        end
+        STOPY5: state_next = STOPZ1;
+
+        STOPZ1: begin
+            if ({z_adr, z_reg} != 4'b0000) begin
+                mar_ld = 1'b1;
+                mar_in = {{(ADDR_WIDTH-4){1'b0}}, z_adr, z_reg};
+                state_next = STOPZ2;
+            end
+            else state_next = STOPPED;
+        end
+        STOPZ2: state_next = STOPZ3;
+        STOPZ3: begin
+            mdr_ld = 1'b1;  
+            state_next = STOPZ4; 
+        end
+        STOPZ4: begin
+            out_next = mem;
+            state_next = STOPZ5;
+        end
+        STOPZ5:  state_next = STOPPED;
+        STOPPED: state_next = STOPPED;
+        
+        default: state_next = START;
+        endcase
+    end
